@@ -6,7 +6,7 @@ REQUIRED ENVIRONMENT VARIABLES:
 
 TRUTH_USERNAME - your Truth Social username<br>
 TRUTH_PASSWORD - your Truth Social password<br>
-EMAIL_FROM - gmail address to send mail from<br>
+EMAIL_FROM - sender's gmail address<br>
 EMAIL_PASSWORD - password for sender's gmail account<br>
 EMAIL_TO - recipient's email address<br>
 <br>
