@@ -1,13 +1,15 @@
 Automatically receive an email whenever @realDonaldTrump posts a new status on Truth Social.
+<br>
+<br>
 
 REQUIRED ENVIRONMENT VARIABLES:
 
-TRUTH_USERNAME - your Truth Social username
-TRUTH_PASSWORD - your Truth Social password
-EMAIL_FROM - gmail address to send mail from
-EMAIL_PASSWORD - password for sender's gmail account
-EMAIL_TO - recipient's email address
-
+TRUTH_USERNAME - your Truth Social username<br>
+TRUTH_PASSWORD - your Truth Social password<br>
+EMAIL_FROM - sender's gmail address<br>
+EMAIL_PASSWORD - password for sender's gmail account<br>
+EMAIL_TO - recipient's email address<br>
+<br>
 
 Important Notes:
 
