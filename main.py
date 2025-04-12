@@ -5,7 +5,8 @@ from html.parser import HTMLParser
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from datetime import datetime
+from datetime import datetime, timedelta
+import time
 
 
 class customParser(HTMLParser):
@@ -85,12 +86,15 @@ months = {
     12: "December",
 }
 
+local_now  = time.time()
+offset = datetime.fromtimestamp(local_now) - datetime.utcfromtimestamp(local_now)
 first = True
 for status in statuses:
     date = status["created_at"]
     date = date[:-1]
 
     formatted_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f")
+    formatted_date = formatted_date + offset
 
     day_of_week = days[formatted_date.isoweekday()]
     word_month = months[formatted_date.month]
@@ -108,13 +112,16 @@ for status in statuses:
         pass
     else:
         if first:
+            first_datetime = formatted_date
             first_date = final_date
             first_timestamp = timestamp
             first_data = parser.data
 
             first = False
         else:
-            output.append(f"<hr class='solid'><br /><span style='white-space: pre-line'>{final_date}\n{timestamp}\n\n{parser.data}\n\n</span>")
+            output.append(
+                f"<hr class='solid'><br /><span style='white-space: pre-line'>{final_date}\n{timestamp}\n\n{parser.data}\n\n</span>"
+            )
 
 output = " ".join(output)
 
@@ -143,11 +150,15 @@ html = f"""\
 </html>
 """
 
-part1 = MIMEText(output, "plain")
-part2 = MIMEText(html, "html")
-msg.attach(part1)
-msg.attach(part2)
+now = datetime.now()
+one_hour = timedelta(hours=1)
+one_hour_ago = now - one_hour
+if first_datetime > one_hour_ago:
+    part1 = MIMEText(output, "plain")
+    part2 = MIMEText(html, "html")
+    msg.attach(part1)
+    msg.attach(part2)
 
-with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp_server:
-    smtp_server.login(EMAIL_FROM, EMAIL_PASSWORD)
-    smtp_server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp_server:
+        smtp_server.login(EMAIL_FROM, EMAIL_PASSWORD)
+        smtp_server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
