@@ -3,8 +3,10 @@ import os
 from dotenv import load_dotenv
 from html.parser import HTMLParser
 import smtplib
-from email.message import EmailMessage
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from datetime import datetime
+
 
 class customParser(HTMLParser):
     data = ""
@@ -14,6 +16,7 @@ class customParser(HTMLParser):
 
     def new_status(self):
         self.data = ""
+
 
 load_dotenv(dotenv_path="./login.env")
 
@@ -32,16 +35,14 @@ body = {
     "password": TRUTH_PASSWORD,
     "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
     "scope": "read",
-    "username": TRUTH_USERNAME
+    "username": TRUTH_USERNAME,
 }
 
 token = requests.post(
     url="https://truthsocial.com/oauth/token",
-    headers = {
-    "User-Agent": USER_AGENT
-    },
+    headers={"User-Agent": USER_AGENT},
     json=body,
-    impersonate="chrome123"
+    impersonate="chrome123",
 )
 
 token = token.json()
@@ -49,54 +50,55 @@ try:
     if token["error"]:
         raise Exception(token["error"])
 except KeyError:
-    token = token['access_token']
+    token = token["access_token"]
 
 statuses = requests.get(
     "https://truthsocial.com/api/v1/accounts/107780257626128497/statuses?exclude_replies=true",
     impersonate="chrome123",
-    headers={
-        "Authorization": "Bearer " + token,
-        "User-Agent": USER_AGENT
-    }
+    headers={"Authorization": "Bearer " + token, "User-Agent": USER_AGENT},
 )
 
 parser = customParser()
 statuses = statuses.json()
 output = []
 days = {
-        1: "Monday",
-        2: "Tuesday",
-        3: "Wednesday",
-        4: "Thursday",
-        5: "Friday",
-        6: "Saturday",
-        7: "Sunday"
-    }
+    1: "Monday",
+    2: "Tuesday",
+    3: "Wednesday",
+    4: "Thursday",
+    5: "Friday",
+    6: "Saturday",
+    7: "Sunday",
+}
 months = {
-        1: "January",
-        2: "February",
-        3: "March",
-        4: "April",
-        5: "May",
-        6: "June",
-        7: "July",
-        8: "August",
-        9: "September",
-        10: "October",
-        11: "November",
-        12: "December"
-    }
+    1: "January",
+    2: "February",
+    3: "March",
+    4: "April",
+    5: "May",
+    6: "June",
+    7: "July",
+    8: "August",
+    9: "September",
+    10: "October",
+    11: "November",
+    12: "December",
+}
+
+first = True
 for status in statuses:
     date = status["created_at"]
     date = date[:-1]
 
-    formatted_date = datetime.strptime(date, '%Y-%m-%dT%H:%M:%S.%f')
+    formatted_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f")
 
     day_of_week = days[formatted_date.isoweekday()]
     word_month = months[formatted_date.month]
-    final_date = f"{day_of_week}, {word_month} {formatted_date.day}, {formatted_date.year}"
-    timestamp = formatted_date.time()
-    
+    final_date = (
+        f"{day_of_week}, {word_month} {formatted_date.day}, {formatted_date.year}"
+    )
+    timestamp = f"{formatted_date.hour}:{formatted_date.minute}"
+
     content = status["content"]
 
     parser.new_status()
@@ -105,7 +107,14 @@ for status in statuses:
     if parser.data == "" or "RT @realDonaldTrump" in parser.data:
         pass
     else:
-        output.append(f"{final_date}\n{timestamp}\n\n{parser.data}\n\n\n")
+        if first:
+            first_date = final_date
+            first_timestamp = timestamp
+            first_data = parser.data
+
+            first = False
+        else:
+            output.append(f"<hr class='solid'><br /><span style='white-space: pre-line'>{final_date}\n{timestamp}\n\n{parser.data}\n\n</span>")
 
 output = " ".join(output)
 
@@ -113,12 +122,32 @@ EMAIL_FROM = os.getenv("EMAIL_FROM")
 EMAIL_TO = os.getenv("EMAIL_TO")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-msg = EmailMessage()
-msg.set_content(output)
-msg['Subject'] = "New Donald Trump Status on Truth Social"
-msg['From'] = EMAIL_FROM
+msg = MIMEMultipart("alternative")
+msg["Subject"] = "New Donald Trump Status on Truth Social"
+msg["From"] = EMAIL_FROM
 msg["To"] = EMAIL_TO
 
-with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp_server:
+html = f"""\
+<html>
+  <body>
+    <div style=
+    "background-color: Cornsilk; padding: 1px; padding-left: 14px; padding-right: 14px; font-size: 125%;">
+      <p style="color: black"><strong>{first_date}<br />{first_timestamp}</strong></p>
+
+      <p>{first_data}</p>
+    </div>
+
+    <br />
+    {output}
+  </body>
+</html>
+"""
+
+part1 = MIMEText(output, "plain")
+part2 = MIMEText(html, "html")
+msg.attach(part1)
+msg.attach(part2)
+
+with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp_server:
     smtp_server.login(EMAIL_FROM, EMAIL_PASSWORD)
     smtp_server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
