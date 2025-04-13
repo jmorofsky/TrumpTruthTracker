@@ -89,6 +89,7 @@ months = {
 local_now  = time.time()
 offset = datetime.fromtimestamp(local_now) - datetime.utcfromtimestamp(local_now)
 first = True
+new_statuses = []
 for status in statuses:
     date = status["created_at"]
     date = date[:-1]
@@ -108,22 +109,28 @@ for status in statuses:
     parser.new_status()
     parser.feed(content)
 
+    now = datetime.now()
+    one_hour = timedelta(hours=1)
+    one_hour_ago = now - one_hour
     if parser.data == "" or "RT @realDonaldTrump" in parser.data:
         pass
-    else:
+    elif formatted_date > one_hour_ago:
         if first:
-            first_datetime = formatted_date
-            first_date = final_date
-            first_timestamp = timestamp
-            first_data = parser.data
-
+            new_statuses.append(
+                f"<p style='color: black'><strong>{final_date}<br />{timestamp}</strong></p><p>{parser.data}</p>"
+            )
             first = False
         else:
-            output.append(
-                f"<hr class='solid'><br /><span style='white-space: pre-line'>{final_date}\n{timestamp}\n\n{parser.data}\n\n</span>"
+            new_statuses.append(
+                f"<hr class='solid'><p style='color: black'><strong>{final_date}<br />{timestamp}</strong></p><p>{parser.data}</p>"
             )
+    else:
+        output.append(
+            f"<hr class='solid'><br /><span style='white-space: pre-line'>{final_date}\n{timestamp}\n\n{parser.data}\n\n</span>"
+        )
 
 output = " ".join(output)
+new_statuses = " ".join(new_statuses)
 
 EMAIL_FROM = os.getenv("EMAIL_FROM")
 EMAIL_TO = os.getenv("EMAIL_TO")
@@ -139,9 +146,7 @@ html = f"""\
   <body>
     <div style=
     "background-color: Cornsilk; padding: 1px; padding-left: 14px; padding-right: 14px; font-size: 125%;">
-      <p style="color: black"><strong>{first_date}<br />{first_timestamp}</strong></p>
-
-      <p>{first_data}</p>
+      {new_statuses}
     </div>
 
     <br />
@@ -150,10 +155,7 @@ html = f"""\
 </html>
 """
 
-now = datetime.now()
-one_hour = timedelta(hours=1)
-one_hour_ago = now - one_hour
-if first_datetime > one_hour_ago:
+if len(new_statuses) > 0:
     part1 = MIMEText(output, "plain")
     part2 = MIMEText(html, "html")
     msg.attach(part1)
