@@ -112,7 +112,7 @@ for status in statuses:
     now = datetime.now()
     one_hour = timedelta(hours=1)
     one_hour_ago = now - one_hour
-    if parser.data == "" or "RT @realDonaldTrump" in parser.data:
+    if parser.data == "" or "RT:" in parser.data or "RT @" in parser.data:
         pass
     elif formatted_date > one_hour_ago:
         if first:
