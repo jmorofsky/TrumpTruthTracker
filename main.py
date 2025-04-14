@@ -86,7 +86,7 @@ months = {
     12: "December",
 }
 
-local_now  = time.time()
+local_now = time.time()
 offset = datetime.fromtimestamp(local_now) - datetime.utcfromtimestamp(local_now)
 first = True
 new_statuses = []
