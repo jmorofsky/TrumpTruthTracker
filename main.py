@@ -39,6 +39,8 @@ body = {
     "username": TRUTH_USERNAME,
 }
 
+print(f"Getting token with username {TRUTH_USERNAME}")
+
 token = requests.post(
     url="https://truthsocial.com/oauth/token",
     headers={"User-Agent": USER_AGENT},
@@ -46,12 +48,20 @@ token = requests.post(
     impersonate="chrome123",
 )
 
-token = token.json()
+if token.content:
+    print("Got token response!")
+    token = token.json()
+else:
+    raise Exception("No token response received.")
+
+
 try:
     if token["error"]:
-        raise Exception(token["error"])
+        raise Exception(f"Error during token acquisition: {token["error"]}")
 except KeyError:
     token = token["access_token"]
+
+print("Fetching statuses...")
 
 statuses = requests.get(
     "https://truthsocial.com/api/v1/accounts/107780257626128497/statuses?exclude_replies=true",
@@ -59,8 +69,13 @@ statuses = requests.get(
     headers={"Authorization": "Bearer " + token, "User-Agent": USER_AGENT},
 )
 
+if statuses.content:
+    print("Got statuses response!")
+    statuses = statuses.json()
+else:
+    raise Exception("No statuses response received.")
+
 parser = customParser()
-statuses = statuses.json()
 output = []
 days = {
     1: "Monday",
@@ -102,7 +117,10 @@ for status in statuses:
     final_date = (
         f"{day_of_week}, {word_month} {formatted_date.day}, {formatted_date.year}"
     )
-    timestamp = f"{formatted_date.hour}:{formatted_date.minute}"
+    if formatted_date.minute < 10:
+        timestamp = f"{formatted_date.hour}:0{formatted_date.minute}"
+    else:
+        timestamp = f"{formatted_date.hour}:{formatted_date.minute}"
 
     content = status["content"]
 
