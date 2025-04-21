@@ -174,6 +174,7 @@ html = f"""\
 """
 
 if len(new_statuses) > 0:
+    print(f"New statuses found! Sending email manifest to {EMAIL_TO}")
     part1 = MIMEText(output, "plain")
     part2 = MIMEText(html, "html")
     msg.attach(part1)
@@ -182,3 +183,5 @@ if len(new_statuses) > 0:
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp_server:
         smtp_server.login(EMAIL_FROM, EMAIL_PASSWORD)
         smtp_server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
+else:
+    print("No new statuses found. Skipping email manifest")
