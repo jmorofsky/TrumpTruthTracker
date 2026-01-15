@@ -211,7 +211,7 @@ def sendEmail(statuses, email_to, email_from, email_password):
     <html>
         <body>
             <div style=
-            "background-color: Cornsilk; padding: 1px; padding-left: 14px; padding-right: 14px;">
+            "background-color: Cornsilk; padding: 14px;">
                 {"<hr style='margin: 20px 0 20px;' />".join(new_status_cards)}
             </div>
             <br />
