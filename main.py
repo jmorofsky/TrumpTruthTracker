@@ -178,7 +178,7 @@ def sendEmail(statuses, email_to, email_from, email_password):
         if status["media"]:
             for item in status["media"]:
                 mediaLinks.append(
-                    f"<a href={item["url"]}><img src={item["preview"]} style='max-width: 100%; border: 1px solid #ddd; border-radius: 4px; padding: 5px;' /></a>"
+                    f"<a href={item['url']}><img src={item['preview']} style='max-width: 100%; border: 1px solid #ddd; border-radius: 4px; padding: 5px;' /></a>"
                 )
 
         return f"""\
