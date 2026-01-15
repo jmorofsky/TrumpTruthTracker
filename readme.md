@@ -1,18 +1,46 @@
 Automatically receive an email whenever @realDonaldTrump posts a new status on Truth Social.
-<br>
-<br>
 
-REQUIRED ENVIRONMENT VARIABLES:
+Designed to be run hourly.
 
-TRUTH_USERNAME - your Truth Social username<br>
-TRUTH_PASSWORD - your Truth Social password<br>
-EMAIL_FROM - sender's gmail address<br>
-EMAIL_PASSWORD - password for sender's gmail account<br>
-EMAIL_TO - recipient's email address<br>
-<br>
+---
 
-Important Notes:
+You must create and place a **.env** file with your Truth Social username, Truth Social password, the sender's email address, receiver's email address, and sender's email password in the project's root.
+```
+TRUTH_USERNAME=jmorofsky
+TRUTH_PASSWORD=mystrongtruthpassword
+EMAIL_FROM=automation.jmorofsky@gmail.com
+EMAIL_TO=jmorofsky@gmail.com
+EMAIL_PASSWORD=mystrongemailpassword
+```
 
-Prior to May 30, 2022, it was possible to connect to Gmail’s SMTP server using your regular Gmail password if “2-step verification” was activated. For a higher security standard, Google now requires you to use an “App Password”.
+---
 
-This is a 16-digit passcode that is generated in your Google account and allows less secure apps or devices that don’t support 2-step verification to sign in to your Gmail Account.
+To run the script, first clone the repository.
+```
+git clone https://github.com/jmorofsky/TrumpTruthTracker
+```
+
+Navigate to the repository.
+```
+cd TrumpTruthTracker
+```
+
+Create a new virtual environment.
+```
+python -m venv venv
+```
+
+Activate the virtual environment and install dependencies.
+```
+venv/Scripts/activate
+pip install -r requirements.txt
+```
+
+Run the script.
+```
+python main.py
+```
+
+---
+
+Application logs are outputted to **app.log** in the project's root directory.

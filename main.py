@@ -1,187 +1,251 @@
-from curl_cffi import requests
 import os
-from dotenv import load_dotenv
-from html.parser import HTMLParser
 import smtplib
+import logging
+from curl_cffi import requests
+from dotenv import load_dotenv
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
-import time
 
 
-class customParser(HTMLParser):
-    data = ""
-
-    def handle_data(self, data):
-        self.data = self.data + data
-
-    def new_status(self):
-        self.data = ""
-
-
-load_dotenv(dotenv_path="./login.env")
-
-TRUTH_USERNAME = os.getenv("TRUTH_USERNAME")
-TRUTH_PASSWORD = os.getenv("TRUTH_PASSWORD")
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    filename="app.log",
+    encoding="utf-8",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
     "Safari/537.36"
 )
 
-body = {
-    "client_id": "9X1Fdd-pxNsAgEDNi_SfhJWi8T-vLuV2WVzKIbkTCw4",
-    "client_secret": "ozF8jzI4968oTKFkEnsBC-UbLPCdrSv0MkXGQu2o_-M",
-    "grant_type": "password",
-    "password": TRUTH_PASSWORD,
-    "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
-    "scope": "read",
-    "username": TRUTH_USERNAME,
-}
 
-print(f"Getting token with username {TRUTH_USERNAME}")
+def loadVars():
+    load_dotenv()
 
-token = requests.post(
-    url="https://truthsocial.com/oauth/token",
-    headers={"User-Agent": USER_AGENT},
-    json=body,
-    impersonate="chrome123",
-)
+    env = {
+        "TRUTH_USERNAME": os.getenv("TRUTH_USERNAME"),
+        "TRUTH_PASSWORD": os.getenv("TRUTH_PASSWORD"),
+        "EMAIL_FROM": os.getenv("EMAIL_FROM"),
+        "EMAIL_TO": os.getenv("EMAIL_TO"),
+        "EMAIL_PASSWORD": os.getenv("EMAIL_PASSWORD"),
+    }
 
-if token.content:
-    print("Got token response!")
-    token = token.json()
-else:
-    raise Exception("No token response received.")
-
-
-try:
-    if token["error"]:
-        raise Exception(f"Error during token acquisition: {token["error"]}")
-except KeyError:
-    token = token["access_token"]
-
-print("Fetching statuses...")
-
-statuses = requests.get(
-    "https://truthsocial.com/api/v1/accounts/107780257626128497/statuses?exclude_replies=true",
-    impersonate="chrome123",
-    headers={"Authorization": "Bearer " + token, "User-Agent": USER_AGENT},
-)
-
-if statuses.content:
-    print("Got statuses response!")
-    statuses = statuses.json()
-else:
-    raise Exception("No statuses response received.")
-
-parser = customParser()
-output = []
-days = {
-    1: "Monday",
-    2: "Tuesday",
-    3: "Wednesday",
-    4: "Thursday",
-    5: "Friday",
-    6: "Saturday",
-    7: "Sunday",
-}
-months = {
-    1: "January",
-    2: "February",
-    3: "March",
-    4: "April",
-    5: "May",
-    6: "June",
-    7: "July",
-    8: "August",
-    9: "September",
-    10: "October",
-    11: "November",
-    12: "December",
-}
-
-local_now = time.time()
-offset = datetime.fromtimestamp(local_now) - datetime.utcfromtimestamp(local_now)
-first = True
-new_statuses = []
-for status in statuses:
-    date = status["created_at"]
-    date = date[:-1]
-
-    formatted_date = datetime.strptime(date, "%Y-%m-%dT%H:%M:%S.%f")
-    formatted_date = formatted_date + offset
-
-    day_of_week = days[formatted_date.isoweekday()]
-    word_month = months[formatted_date.month]
-    final_date = (
-        f"{day_of_week}, {word_month} {formatted_date.day}, {formatted_date.year}"
-    )
-    if formatted_date.minute < 10:
-        timestamp = f"{formatted_date.hour}:0{formatted_date.minute}"
+    if not all(
+        key in env
+        for key in [
+            "TRUTH_USERNAME",
+            "TRUTH_PASSWORD",
+            "EMAIL_FROM",
+            "EMAIL_TO",
+            "EMAIL_PASSWORD",
+        ]
+    ):
+        logger.critical("Missing one or more required environment variables.")
+        raise Exception
     else:
-        timestamp = f"{formatted_date.hour}:{formatted_date.minute}"
+        return env
 
-    content = status["content"]
 
-    parser.new_status()
-    parser.feed(content)
+def getToken(username, password):
+    body = {
+        "client_id": "9X1Fdd-pxNsAgEDNi_SfhJWi8T-vLuV2WVzKIbkTCw4",
+        "client_secret": "ozF8jzI4968oTKFkEnsBC-UbLPCdrSv0MkXGQu2o_-M",
+        "grant_type": "password",
+        "password": password,
+        "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
+        "scope": "read",
+        "username": username,
+    }
+
+    logger.info(f"Getting token with username {username}.")
+    token = requests.post(
+        url="https://truthsocial.com/oauth/token",
+        headers={"User-Agent": USER_AGENT},
+        json=body,
+        impersonate="chrome123",
+    )
+
+    if token.content:
+        logger.info("Received token response.")
+        token = token.json()
+    else:
+        logger.critical("Failed to receive token response.")
+        raise Exception
+
+    if "error" in token:
+        logger.critical("Error occurred during token request.")
+        logger.error(token["error"])
+
+        raise Exception
+    elif "access_token" in token:
+        return token["access_token"]
+    else:
+        logger.critical(
+            "Received unexpected response from token request. Missing access_token field."
+        )
+        raise Exception
+
+
+def getStatuses(token):
+    logger.info("Getting list of statuses.")
+
+    statuses = requests.get(
+        url="https://truthsocial.com/api/v1/accounts/107780257626128497/statuses?exclude_replies=true",
+        headers={"Authorization": "Bearer " + token, "User-Agent": USER_AGENT},
+        impersonate="chrome123",
+    )
+
+    if statuses.content:
+        logger.info("Received statuses response.")
+        statuses = statuses.json()
+    else:
+        logger.critical("Failed to received statuses response.")
+        raise Exception
+
+    if "error" in statuses:
+        logger.critical("Error occurred during statuses request.")
+        logger.error(token["error"])
+
+        raise Exception
+    else:
+        return statuses
+
+
+def formatStatuses(statusJson):
+    formattedStatuses = []
+
+    for status in statusJson:
+        statusObj = {}
+
+        timestamp = status["created_at"].replace("Z", "+00:00")
+        utc_dt = datetime.fromisoformat(timestamp)
+        local_dt = utc_dt.astimezone()
+        statusObj["local_timestamp"] = local_dt
+        statusObj["naive_timestamp"] = local_dt.replace(tzinfo=None)
+
+        statusObj["url"] = status["url"]
+        statusObj["content"] = status["content"]
+        statusObj["replies_count"] = status["replies_count"]
+        statusObj["reblogs_count"] = status["reblogs_count"]
+        statusObj["favorites_count"] = status["favourites_count"]
+
+        statusObj["media"] = []
+        if status["media_attachments"]:
+            for attachment in status["media_attachments"]:
+                if attachment["url"]:
+                    statusObj["media"].append(
+                        {"url": attachment["url"], "preview": attachment["preview_url"]}
+                    )
+
+        formattedStatuses.append(statusObj)
+
+    return formattedStatuses
+
+
+def sendEmail(statuses, email_to, email_from, email_password):
+    if not statuses:
+        logger.info("No statuses received. Skipping sending email.")
+        return
 
     now = datetime.now()
     one_hour = timedelta(hours=1)
     one_hour_ago = now - one_hour
-    if parser.data == "" or "RT:" in parser.data or "RT @" in parser.data:
-        pass
-    elif formatted_date > one_hour_ago:
-        if first:
-            new_statuses.append(
-                f"<p style='color: black'><strong>{final_date}<br />{timestamp}</strong></p><p>{parser.data}</p>"
-            )
-            first = False
-        else:
-            new_statuses.append(
-                f"<hr class='solid'><p style='color: black'><strong>{final_date}<br />{timestamp}</strong></p><p>{parser.data}</p>"
-            )
-    else:
-        output.append(
-            f"<hr class='solid'><br /><span style='white-space: pre-line'>{final_date}\n{timestamp}\n\n{parser.data}\n\n</span>"
+
+    new_statuses = []
+    for status in statuses:
+        if status["naive_timestamp"] > one_hour_ago:
+            new_statuses.append(status)
+            statuses.remove(status)
+
+    if not new_statuses:
+        logger.info(
+            "No new statuses received from within the past hour. Skipping sending email."
         )
+        return
 
-output = " ".join(output)
-new_statuses = " ".join(new_statuses)
+    logger.info("Sending email with new statuses.")
 
-EMAIL_FROM = os.getenv("EMAIL_FROM")
-EMAIL_TO = os.getenv("EMAIL_TO")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "New Donald Trump Status on Truth Social"
+    msg["From"] = email_from
+    msg["To"] = email_to
 
-msg = MIMEMultipart("alternative")
-msg["Subject"] = "New Donald Trump Status on Truth Social"
-msg["From"] = EMAIL_FROM
-msg["To"] = EMAIL_TO
+    def statusCard(status):
+        mediaLinks = []
+        if status["media"]:
+            for item in status["media"]:
+                mediaLinks.append(
+                    f"<a href={item["url"]}><img src={item["preview"]} style='max-width: 100%; border: 1px solid #ddd; border-radius: 4px; padding: 5px;' /></a>"
+                )
 
-html = f"""\
-<html>
-  <body>
-    <div style=
-    "background-color: Cornsilk; padding: 1px; padding-left: 14px; padding-right: 14px; font-size: 125%;">
-      {new_statuses}
-    </div>
+        return f"""\
+            <div>
+                <a href={status["url"]} style="font-size: 12px">View post on Truth Social</a>
 
-    <br />
-    {output}
-  </body>
-</html>
-"""
+                <div style="font-size: 125%">
+                    <p>
+                        <strong>
+                            {status["local_timestamp"].strftime("%A, %B %d, %Y")}<br />
+                            {status["local_timestamp"].strftime("%H:%M")}
+                        </strong>
+                    </p>
 
-if len(new_statuses) > 0:
-    print(f"New statuses found! Sending email manifest to {EMAIL_TO}")
-    part1 = MIMEText(output, "plain")
-    part2 = MIMEText(html, "html")
-    msg.attach(part1)
-    msg.attach(part2)
+                    {status["content"]}
+                </div>
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp_server:
-        smtp_server.login(EMAIL_FROM, EMAIL_PASSWORD)
-        smtp_server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
-else:
-    print("No new statuses found. Skipping email manifest")
+                <div style="margin-bottom: 15px;">{" ".join(mediaLinks)}</div>
+
+                <span style="margin-right: 20px; margin-top: 15px;">↩️ {status["replies_count"]}</span>
+                <span style="margin-right: 20px;">🔃 {status["reblogs_count"]}</span>
+                <span>❤️ {status["favorites_count"]}</span>
+            </div>
+            """
+
+    new_status_cards = [statusCard(status) for status in new_statuses]
+    old_status_cards = [statusCard(status) for status in statuses]
+
+    html = f"""\
+    <html>
+        <body>
+            <div style=
+            "background-color: Cornsilk; padding: 1px; padding-left: 14px; padding-right: 14px;">
+                {"<hr style='margin: 20px 0 20px;' />".join(new_status_cards)}
+            </div>
+            <br />
+            
+            {"<hr style='margin: 20px 0 20px;' />".join(old_status_cards)}
+        </body>
+    </html>
+    """
+
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp_server:
+            smtp_server.login(email_from, email_password)
+            smtp_server.sendmail(email_from, email_to, msg.as_string())
+        logger.info("Email sent successfully.")
+    except Exception as e:
+        logger.critical("Error occurred while sending email.")
+        logger.error(e)
+
+
+def main():
+    env = loadVars()
+
+    token = getToken(env["TRUTH_USERNAME"], env["TRUTH_PASSWORD"])
+
+    statuses = getStatuses(token)
+
+    formattedStatuses = formatStatuses(statuses)
+
+    sendEmail(
+        formattedStatuses, env["EMAIL_TO"], env["EMAIL_FROM"], env["EMAIL_PASSWORD"]
+    )
+
+
+if __name__ == "__main__":
+    main()
